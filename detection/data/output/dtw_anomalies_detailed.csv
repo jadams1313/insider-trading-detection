@@ -1,0 +1,15 @@
+method,method_name,window,pattern,day_in_window,actual_day,dtw_distance
+2,Day Ahead Forecasting,21,1,22,1122,8.869526701950573
+2,Day Ahead Forecasting,21,1,23,1123,8.81990513090332
+2,Day Ahead Forecasting,21,1,24,1124,8.751773132678426
+2,Day Ahead Forecasting,21,5,22,1122,7.6081820063701695
+2,Day Ahead Forecasting,21,5,23,1123,7.739875776505581
+2,Day Ahead Forecasting,21,5,24,1124,7.634914201129945
+2,Day Ahead Forecasting,21,5,25,1125,8.626473468340839
+2,Day Ahead Forecasting,21,5,26,1126,8.973024234571966
+2,Day Ahead Forecasting,34,1,25,1775,5.957132438050061
+2,Day Ahead Forecasting,34,1,27,1777,7.571356720953089
+2,Day Ahead Forecasting,34,5,23,1773,7.6372537086851375
+2,Day Ahead Forecasting,34,5,25,1775,5.596195936196807
+2,Day Ahead Forecasting,34,5,26,1776,6.660274318579282
+2,Day Ahead Forecasting,34,5,27,1777,7.531772581876459
