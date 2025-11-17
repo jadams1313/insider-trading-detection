@@ -1,0 +1,22 @@
+Stock-GDELT Integration Summary for AMSC
+======================================================================
+
+Total observations: 1648
+Date range: 2011-03-14 00:00:00 to 2017-09-27 00:00:00
+Features: 133
+
+Stock Statistics:
+  Avg Daily Volume: 107617
+  Avg Daily Return: -0.1377%
+  Return Volatility: 4.5507%
+
+GDELT Statistics:
+  Days with Coverage: 4
+  Avg Articles/Day: 0.00
+  Avg Tone: 0.01
+  Avg Polarity: 0.01
+
+Event Statistics:
+  Volume Spikes: 165
+  Price Drops: 165
+  Major Events: 42

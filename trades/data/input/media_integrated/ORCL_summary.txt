@@ -1,0 +1,22 @@
+Stock-GDELT Integration Summary for ORCL
+======================================================================
+
+Total observations: 1193
+Date range: 2013-01-03 00:00:00 to 2017-09-27 00:00:00
+Features: 133
+
+Stock Statistics:
+  Avg Daily Volume: 16116622
+  Avg Daily Return: 0.0360%
+  Return Volatility: 1.3009%
+
+GDELT Statistics:
+  Days with Coverage: 121
+  Avg Articles/Day: 0.21
+  Avg Tone: 0.14
+  Avg Polarity: 0.52
+
+Event Statistics:
+  Volume Spikes: 119
+  Price Drops: 120
+  Major Events: 37

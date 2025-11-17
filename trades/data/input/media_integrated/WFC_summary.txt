@@ -1,0 +1,22 @@
+Stock-GDELT Integration Summary for WFC
+======================================================================
+
+Total observations: 1006
+Date range: 2013-10-01 00:00:00 to 2017-09-27 00:00:00
+Features: 133
+
+Stock Statistics:
+  Avg Daily Volume: 18056060
+  Avg Daily Return: 0.0342%
+  Return Volatility: 1.2017%
+
+GDELT Statistics:
+  Days with Coverage: 163
+  Avg Articles/Day: 0.59
+  Avg Tone: -0.04
+  Avg Polarity: 0.81
+
+Event Statistics:
+  Volume Spikes: 101
+  Price Drops: 101
+  Major Events: 34

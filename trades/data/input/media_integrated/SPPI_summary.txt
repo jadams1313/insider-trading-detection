@@ -1,0 +1,22 @@
+Stock-GDELT Integration Summary for SPPI
+======================================================================
+
+Total observations: 947
+Date range: 2013-12-24 00:00:00 to 2017-09-27 00:00:00
+Features: 133
+
+Stock Statistics:
+  Avg Daily Volume: 931679
+  Avg Daily Return: 0.0752%
+  Return Volatility: 3.0354%
+
+GDELT Statistics:
+  Days with Coverage: 5
+  Avg Articles/Day: 0.01
+  Avg Tone: -0.00
+  Avg Polarity: 0.02
+
+Event Statistics:
+  Volume Spikes: 95
+  Price Drops: 95
+  Major Events: 23

@@ -1,0 +1,22 @@
+Stock-GDELT Integration Summary for EVR
+======================================================================
+
+Total observations: 929
+Date range: 2014-01-22 00:00:00 to 2017-09-27 00:00:00
+Features: 133
+
+Stock Statistics:
+  Avg Daily Volume: 414863
+  Avg Daily Return: 0.0445%
+  Return Volatility: 1.8117%
+
+GDELT Statistics:
+  Days with Coverage: 20
+  Avg Articles/Day: 0.03
+  Avg Tone: 0.02
+  Avg Polarity: 0.08
+
+Event Statistics:
+  Volume Spikes: 92
+  Price Drops: 93
+  Major Events: 26

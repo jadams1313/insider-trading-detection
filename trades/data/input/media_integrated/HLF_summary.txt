@@ -1,0 +1,22 @@
+Stock-GDELT Integration Summary for HLF
+======================================================================
+
+Total observations: 1221
+Date range: 2012-11-21 00:00:00 to 2017-09-27 00:00:00
+Features: 133
+
+Stock Statistics:
+  Avg Daily Volume: 2459406
+  Avg Daily Return: 0.0768%
+  Return Volatility: 3.0865%
+
+GDELT Statistics:
+  Days with Coverage: 6
+  Avg Articles/Day: 0.01
+  Avg Tone: -0.00
+  Avg Polarity: 0.03
+
+Event Statistics:
+  Volume Spikes: 123
+  Price Drops: 122
+  Major Events: 37
