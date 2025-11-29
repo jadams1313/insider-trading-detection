@@ -1,343 +1,272 @@
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
-import os
+from pathlib import Path
+import logging
 
-class GDELTStockIntegrator:
-    """
-    Integrates GDELT media coverage data with stock price data
-    Creates features for volume and returns prediction
-    """
-    
-    def __init__(self, stock_file, gdelt_file, ticker, output_dir='trades/data/input/media_integrated'):
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+
+class MediaStockFeatureEngineer:
+    def __init__(self, mentions_csv, stock_data_dir, tickers):
         """
         Args:
-            stock_file: Path to stock CSV (Date, Open, High, Low, Close, Adj Close, Volume)
-            gdelt_file: Path to GDELT CSV (Date, Ticker, ArticleCount, Tone, Polarity, WordCount)
-            ticker: Stock ticker to process (e.g., 'AMSC')
-            output_dir: Directory to save processed data
+            mentions_csv: Path to the media mentions CSV
+            stock_data_dir: Directory containing stock CSV files
+            tickers: List of ticker symbols
         """
-        self.stock_file = stock_file
-        self.gdelt_file = gdelt_file
-        self.ticker = ticker
-        self.output_dir = output_dir
+        self.mentions_csv = mentions_csv
+        self.stock_data_dir = Path(stock_data_dir)
+        self.tickers = tickers
         
+    def load_mentions_data(self):
+        """Load and prepare media mentions data"""
+        logger.info(f"Loading mentions data from {self.mentions_csv}")
+        
+        df = pd.read_csv(self.mentions_csv)
+        # Convert to datetime and normalize to date only (no time component)
+        df['Date'] = pd.to_datetime(df['Date'], utc=True).dt.normalize()
+        
+        logger.info(f"Loaded {len(df)} mention records")
+        logger.info(f"Date range: {df['Date'].min()} to {df['Date'].max()}")
+        logger.info(f"Tickers: {df['Ticker'].unique().tolist()}")
+        
+        return df
+    
     def load_stock_data(self):
-        """Load and preprocess stock price data"""
-        print(f"Loading stock data from {self.stock_file}...")
+        """Load all stock CSV files and combine"""
+        logger.info(f"Loading stock data from {self.stock_data_dir}")
         
-        # Load stock data
-        df = pd.read_csv(self.stock_file)
-        df['Date'] = pd.to_datetime(df['Date'])
-        df = df.sort_values('Date').reset_index(drop=True)
-        if 'Adj Close' not in df.columns and 'Close' in df.columns:
-            df['Adj Close'] = df['Close']
-        # Calculate features
-        df['Returns'] = df['Close'].pct_change()
-        df['Volume_Change'] = df['Volume'].pct_change()
-        df['Price_Range'] = (df['High'] - df['Low']) / df['Close']
-        df['Price_Change'] = (df['Close'] - df['Open']) / df['Open']
+        all_stock_data = []
         
-        # Log transform volume for better distribution
-        df['Log_Volume'] = np.log1p(df['Volume'])
-        
-        # Moving averages
-        df['MA_5'] = df['Close'].rolling(window=5).mean()
-        df['MA_20'] = df['Close'].rolling(window=20).mean()
-        df['Volume_MA_5'] = df['Volume'].rolling(window=5).mean()
-        df['Volume_MA_20'] = df['Volume'].rolling(window=20).mean()
-        
-        # Volatility
-        df['Volatility_5'] = df['Returns'].rolling(window=5).std()
-        df['Volatility_20'] = df['Returns'].rolling(window=20).std()
-        
-        print(f"Loaded {len(df)} days of stock data from {df['Date'].min()} to {df['Date'].max()}")
-        return df
-    
-    def load_gdelt_data(self):
-        """Load and preprocess GDELT data"""
-        print(f"Loading GDELT data from {self.gdelt_file}...")
-        
-        df = pd.read_csv(self.gdelt_file)
-        
-        # Filter for specific ticker
-        df = df[df['Ticker'] == self.ticker].copy()
-        
-        if len(df) == 0:
-            print(f"WARNING: No GDELT data found for ticker {self.ticker}")
-            return pd.DataFrame()
-        
-        # Convert date
-        df['Date'] = pd.to_datetime(df['Date'])
-        df = df.sort_values('Date').reset_index(drop=True)
-        
-        print(f"Loaded {len(df)} days of GDELT data from {df['Date'].min()} to {df['Date'].max()}")
-        return df
-    
-    def create_rolling_gdelt_features(self, gdelt_df, windows=[3, 7, 14, 30]):
-        """
-        Create rolling window features from GDELT data
-        
-        Args:
-            gdelt_df: DataFrame with GDELT data
-            windows: List of window sizes in days
-        """
-        print("Creating rolling GDELT features...")
-        
-        df = gdelt_df.copy()
-        
-        for window in windows:
-            # Article count features
-            df[f'ArticleCount_MA_{window}'] = df['ArticleCount'].rolling(window=window).mean()
-            df[f'ArticleCount_Sum_{window}'] = df['ArticleCount'].rolling(window=window).sum()
-            df[f'ArticleCount_Max_{window}'] = df['ArticleCount'].rolling(window=window).max()
-            df[f'ArticleCount_Std_{window}'] = df['ArticleCount'].rolling(window=window).std()
+        for ticker in self.tickers:
+            # Try common filename patterns
+            possible_files = [
+                self.stock_data_dir / f"{ticker}_2015_2025.csv",
+                self.stock_data_dir / f"{ticker}.csv",
+            ]
             
-            # Tone features
-            df[f'Tone_MA_{window}'] = df['Tone'].rolling(window=window).mean()
-            df[f'Tone_Min_{window}'] = df['Tone'].rolling(window=window).min()
-            df[f'Tone_Max_{window}'] = df['Tone'].rolling(window=window).max()
-            df[f'Tone_Std_{window}'] = df['Tone'].rolling(window=window).std()
+            stock_file = None
+            for f in possible_files:
+                if f.exists():
+                    stock_file = f
+                    break
             
-            # Polarity features
-            df[f'Polarity_MA_{window}'] = df['Polarity'].rolling(window=window).mean()
+            if stock_file is None:
+                logger.warning(f"Could not find stock data for {ticker}")
+                continue
             
-            # Word count features
-            df[f'WordCount_MA_{window}'] = df['WordCount'].rolling(window=window).mean()
-            df[f'WordCount_Sum_{window}'] = df['WordCount'].rolling(window=window).sum()
+            logger.info(f"Loading {ticker} from {stock_file.name}")
+            df = pd.read_csv(stock_file)
+            
+            # Handle date column (might be index or column)
+            if 'Date' not in df.columns:
+                df = df.reset_index()
+            
+            # Convert to datetime and strip timezone, keep only date part
+            df['Date'] = pd.to_datetime(df['Date'],utc=True).dt.tz_localize(None)
+            df['Ticker'] = ticker
+            
+            # Keep only relevant columns
+            columns_to_keep = ['Date', 'Ticker', 'Open', 'High', 'Low', 'Close', 'Volume']
+            df = df[[col for col in columns_to_keep if col in df.columns]]
+            
+            all_stock_data.append(df)
         
-        # Binary indicators
-        df['High_Coverage'] = (df['ArticleCount'] > df['ArticleCount'].quantile(0.75)).astype(int)
-        df['Negative_Tone'] = (df['Tone'] < 0).astype(int)
-        df['Very_Negative_Tone'] = (df['Tone'] < -2).astype(int)
-        df['High_Polarity'] = (df['Polarity'] > df['Polarity'].quantile(0.75)).astype(int)
+        combined = pd.concat(all_stock_data, ignore_index=True)
+        logger.info(f"Combined stock data: {len(combined)} records across {len(all_stock_data)} tickers")
         
-        # Days since features
-        df['Days_Since_Coverage'] = 0
-        last_coverage_idx = -999
-        for idx in range(len(df)):
-            if df.loc[idx, 'ArticleCount'] > 0:
-                last_coverage_idx = idx
-            df.loc[idx, 'Days_Since_Coverage'] = idx - last_coverage_idx if last_coverage_idx >= 0 else 999
-        
-        return df
+        return combined
     
-    def merge_data(self, stock_df, gdelt_df):
-        """
-        Merge stock and GDELT data
+    def merge_data(self, mentions_df, stock_df, ticker='GOOGL'):
+        """Merge mentions and stock data"""
+        logger.info("Merging mentions and stock data...")
         
-        Args:
-            stock_df: DataFrame with stock data
-            gdelt_df: DataFrame with GDELT data
-        """
-        print("Merging stock and GDELT data...")
+        # Filter mentions data for the specific ticker
+        mentions_df = mentions_df[mentions_df['Ticker'] == ticker].copy()
         
-        # Merge on date (left join to keep all stock dates)
-        merged = pd.merge(stock_df, gdelt_df, on='Date', how='left')
+        # Ensure Date columns are datetime, timezone-naive, and normalized to midnight
+        mentions_df['Date'] = pd.to_datetime(mentions_df['Date'], utc=True).dt.tz_localize(None)
+        stock_df['Date'] = pd.to_datetime(stock_df['Date'], utc=True).dt.tz_localize(None)
         
-        # Fill missing GDELT values with 0 (no coverage on that day)
-        gdelt_cols = [col for col in merged.columns if col not in stock_df.columns or col == 'Date']
-        for col in gdelt_cols:
-            if col != 'Date' and col != 'Ticker':
+        logger.info(f"Stock date range: {stock_df['Date'].min()} to {stock_df['Date'].max()}")
+        logger.info(f"Mentions date range: {mentions_df['Date'].min()} to {mentions_df['Date'].max()}")
+                
+        # Drop Ticker column from mentions before merge (to avoid duplication)
+        mentions_df = mentions_df.drop(columns=['Ticker'])
+        
+        # Left join: keep all stock trading days, add mentions data
+        merged = stock_df.merge(
+            mentions_df,
+            on='Date',
+            how='left'
+        )
+        
+        logger.info(f"After mentions merge: {len(merged)} records, {merged['ArticleCount'].notna().sum()} with mentions")
+        
+        # Fill missing mention data with zeros
+        mention_columns = ['ArticleCount', 'Tone', 'Polarity', 'WordCount']
+        for col in mention_columns:
+            if col in merged.columns:
                 merged[col] = merged[col].fillna(0)
         
-        # Forward fill some rolling features (carry forward last known value)
-        rolling_cols = [col for col in merged.columns if '_MA_' in col or '_Sum_' in col or '_Std_' in col]
-        for col in rolling_cols:
-            merged[col] = merged[col].fillna(method='ffill').fillna(0)
+        logger.info(f"Final merged data: {len(merged)} records")
         
-        print(f"Merged dataset has {len(merged)} rows")
         return merged
     
-    def create_lagged_features(self, df, lag_days=[1, 2, 3, 5, 7]):
-        """
-        Create lagged features for prediction
+    def create_target_variable(self, df):
+        """Create Volume_Next_Day target variable"""
+        logger.info("Creating target variable (Volume_Next_Day)...")
         
-        Args:
-            df: Merged DataFrame
-            lag_days: List of lag periods
-        """
-        print("Creating lagged features...")
+        df = df.sort_values(['Ticker', 'Date'])
         
-        result = df.copy()
+        # Shift volume by -1 within each ticker group
+        df['Volume'] = df.groupby('Ticker')['Volume'].shift(-1)
         
-        # Lag GDELT features
-        gdelt_features = ['ArticleCount', 'Tone', 'Polarity', 'WordCount',
-                         'High_Coverage', 'Negative_Tone', 'Very_Negative_Tone']
+        logger.info(f"Target variable created. {df['Volume'].isna().sum()} missing values (last day per ticker)")
         
-        for feature in gdelt_features:
-            if feature in result.columns:
-                for lag in lag_days:
-                    result[f'{feature}_Lag_{lag}'] = result[feature].shift(lag)
-        
-        # Lag stock features
-        stock_features = ['Returns', 'Volume_Change', 'Volatility_5', 'Price_Range']
-        for feature in stock_features:
-            if feature in result.columns:
-                for lag in lag_days:
-                    result[f'{feature}_Lag_{lag}'] = result[feature].shift(lag)
-        
-        return result
+        return df
     
-    def identify_event_windows(self, df, volume_threshold_percentile=0, 
-                               return_threshold_percentile=0):
-        """
-        Identify significant events (volume spikes, large price drops)
+    def create_lag_features(self, df, columns, lags=[1, 7, 30]):
+        """Create lagged features"""
+        logger.info(f"Creating lag features for {columns}...")
         
-        Args:
-            df: Merged DataFrame
-            volume_threshold_percentile: Percentile for volume spike detection
-            return_threshold_percentile: Percentile for price drop detection
-        """
-        print("Identifying event windows...")
+        df = df.sort_values(['Ticker', 'Date'])
         
-        result = df.copy()
+        for col in columns:
+            if col not in df.columns:
+                continue
+                
+            for lag in lags:
+                new_col = f"{col}_lag{lag}"
+                df[new_col] = df.groupby('Ticker')[col].shift(lag)
         
-        # Calculate thresholds
-        volume_threshold = result['Volume'].quantile(volume_threshold_percentile / 100)
-        return_threshold = result['Returns'].quantile(return_threshold_percentile / 100)
-        
-        # Mark events
-        result['Volume_Spike'] = (result['Volume'] > volume_threshold).astype(int)
-        result['Price_Drop'] = (result['Returns'] < return_threshold).astype(int)
-        result['Major_Event'] = ((result['Volume_Spike'] == 1) & 
-                                 (result['Price_Drop'] == 1)).astype(int)
-        
-        # Create event windows (30 days before, 30 days after)
-        event_dates = result[result['Major_Event'] == 1]['Date'].values
-        
-        for event_date in event_dates:
-            event_date = pd.Timestamp(event_date)
-            pre_window = (result['Date'] >= event_date - timedelta(days=30)) & \
-                        (result['Date'] < event_date)
-            post_window = (result['Date'] > event_date) & \
-                         (result['Date'] <= event_date + timedelta(days=30))
-            
-            result.loc[pre_window, 'Pre_Event_Window'] = 1
-            result.loc[result['Date'] == event_date, 'Event_Day'] = 1
-            result.loc[post_window, 'Post_Event_Window'] = 1
-        
-        # Fill NaN with 0
-        for col in ['Pre_Event_Window', 'Event_Day', 'Post_Event_Window']:
-            if col not in result.columns:
-                result[col] = 0
-            else:
-                result[col] = result[col].fillna(0).astype(int)
-        
-        print(f"Found {result['Major_Event'].sum()} major events")
-        print(f"Volume spike threshold: {volume_threshold:.0f}")
-        print(f"Return drop threshold: {return_threshold:.4f}")
-        
-        return result
+        return df
     
-    def save_processed_data(self, df, filename_suffix='processed'):
-        """Save processed data"""
-        output_file = os.path.join(self.output_dir, 
-                                   f'{self.ticker}_{filename_suffix}.csv')
+    def create_rolling_features(self, df, columns, window=30):
+        """Create rolling window features"""
+        logger.info(f"Creating {window}-day rolling window features...")
         
-        # Drop rows with too many NaN values (from initial rolling windows)
-        df_clean = df.dropna(subset=['Returns', 'Volume_Change'])
+        df = df.sort_values(['Ticker', 'Date'])
         
-        print(f"\nSaving processed data to {output_file}")
-        print(f"Final dataset shape: {df_clean.shape}")
-        print(f"Columns: {len(df_clean.columns)}")
-        print(f"Date range: {df_clean['Date'].min()} to {df_clean['Date'].max()}")
-        
-        df_clean.to_csv(output_file, index=False)
-        
-        # Save summary statistics
-        summary_file = os.path.join(self.output_dir, 
-                                    f'{self.ticker}_summary.txt')
-        with open(summary_file, 'w') as f:
-            f.write(f"Stock-GDELT Integration Summary for {self.ticker}\n")
-            f.write("=" * 70 + "\n\n")
-            f.write(f"Total observations: {len(df_clean)}\n")
-            f.write(f"Date range: {df_clean['Date'].min()} to {df_clean['Date'].max()}\n")
-            f.write(f"Features: {len(df_clean.columns)}\n\n")
+        for col in columns:
+            if col not in df.columns:
+                continue
             
-            f.write("Stock Statistics:\n")
-            f.write(f"  Avg Daily Volume: {df_clean['Volume'].mean():.0f}\n")
-            f.write(f"  Avg Daily Return: {df_clean['Returns'].mean():.4%}\n")
-            f.write(f"  Return Volatility: {df_clean['Returns'].std():.4%}\n\n")
+            # Rolling mean
+            df[f"{col}_mean_{window}d"] = (
+                df.groupby('Ticker')[col]
+                .rolling(window=window, min_periods=1)
+                .mean()
+                .reset_index(0, drop=True)
+            )
             
-            if 'ArticleCount' in df_clean.columns:
-                f.write("GDELT Statistics:\n")
-                f.write(f"  Days with Coverage: {(df_clean['ArticleCount'] > 0).sum()}\n")
-                f.write(f"  Avg Articles/Day: {df_clean['ArticleCount'].mean():.2f}\n")
-                f.write(f"  Avg Tone: {df_clean['Tone'].mean():.2f}\n")
-                f.write(f"  Avg Polarity: {df_clean['Polarity'].mean():.2f}\n\n")
+            # Rolling std
+            df[f"{col}_std_{window}d"] = (
+                df.groupby('Ticker')[col]
+                .rolling(window=window, min_periods=1)
+                .std()
+                .reset_index(0, drop=True)
+            )
             
-            f.write("Event Statistics:\n")
-            f.write(f"  Volume Spikes: {df_clean['Volume_Spike'].sum()}\n")
-            f.write(f"  Price Drops: {df_clean['Price_Drop'].sum()}\n")
-            f.write(f"  Major Events: {df_clean['Major_Event'].sum()}\n")
+            # Spike detection (z-score)
+            mean_col = f"{col}_mean_{window}d"
+            std_col = f"{col}_std_{window}d"
+            df[f"{col}_spike"] = (df[col] - df[mean_col]) / (df[std_col] + 1e-8)  # Avoid division by zero
         
-        return output_file
+        return df
     
-    def process(self):
-        """
-        Run full integration pipeline
-        """
-        print("\n" + "=" * 70)
-        print(f"GDELT-Stock Data Integration for {self.ticker}")
-        print("=" * 70 + "\n")
+    def create_temporal_features(self, df):
+        """Create temporal features"""
+        logger.info("Creating temporal features...")
+        
+        df['day_of_week'] = df['Date'].dt.dayofweek  # 0=Monday, 6=Sunday
+        df['month'] = df['Date'].dt.month
+        df['quarter'] = df['Date'].dt.quarter
+        df['year'] = df['Date'].dt.year
+        
+        # Is last day of month/quarter
+        df['is_month_end'] = df['Date'].dt.is_month_end.astype(int)
+        df['is_quarter_end'] = df['Date'].dt.is_quarter_end.astype(int)
+        
+        return df
+    
+    def engineer_features(self):
+        """Run complete feature engineering pipeline"""
+        logger.info("="*60)
+        logger.info("Starting feature engineering pipeline")
+        logger.info("="*60)
         
         # Load data
+        mentions_df = self.load_mentions_data()
         stock_df = self.load_stock_data()
-        gdelt_df = self.load_gdelt_data()
         
-        # Process GDELT features
-        if len(gdelt_df) > 0:
-            gdelt_df = self.create_rolling_gdelt_features(gdelt_df)
+        # Merge
+        df = self.merge_data(mentions_df, stock_df)
         
-        # Merge datasets
-        merged_df = self.merge_data(stock_df, gdelt_df)
+        # Create target variable
+        df = self.create_target_variable(df)
         
-        # Create lagged features
-        merged_df = self.create_lagged_features(merged_df)
+        # Create lag features
+        media_cols = ['ArticleCount', 'Tone', 'Polarity', 'WordCount']
+        stock_cols = ['Volume', 'Close']
+        df = self.create_lag_features(df, media_cols + stock_cols, lags=[1, 7, 30])
         
-        # Identify event windows
-        merged_df = self.identify_event_windows(merged_df)
+        # Create rolling features
+        df = self.create_rolling_features(df, media_cols + stock_cols, window=30)
         
-        # Save results
-        output_file = self.save_processed_data(merged_df)
+        # Create temporal features
+        df = self.create_temporal_features(df)
         
-        print("\n" + "=" * 70)
-        print("Integration Complete!")
-        print("=" * 70 + "\n")
+        # Sort by date and ticker
+        df = df.sort_values(['Date', 'Ticker']).reset_index(drop=True)
         
-        return merged_df, output_file
-
-
-def main():
-    """Example usage"""
+        logger.info("="*60)
+        logger.info("Feature engineering complete!")
+        logger.info(f"Final dataset shape: {df.shape}")
+        logger.info(f"Columns: {df.columns.tolist()}")
+        logger.info("="*60)
+        
+        return df
     
-    # Configuration
-    ticker = 'GOOGL'
-    stock_file = 'trades/data/input/company_trades/GOOG.csv'  # Your stock data file
-    gdelt_file = 'media/media_data/output/gkg_company_timeseries.csv'  # Your GDELT file
-    
-    # Create integrator
-    integrator = GDELTStockIntegrator(
-        stock_file=stock_file,
-        gdelt_file=gdelt_file,
-        ticker=ticker
-    )
-    
-    # Process data
-    merged_df, output_file = integrator.process()
-    
-    # Display sample
-    print("\nSample of merged data:")
-    print(merged_df[['Date', 'Close', 'Volume', 'Returns', 
-                     'ArticleCount', 'Tone', 'Major_Event']].head(20))
-    
-    # Display feature correlation with volume
-   # if 'ArticleCount' in merged_df.columns:
-    #    print("\nTop features correlated with Volume:")
-    #    correlations = merged_df.corr()['Volume'].sort_values(ascending=False)
-    #    print(correlations.head(15))
+    def save_dataset(self, df, output_file):
+        """Save engineered dataset to CSV"""
+        logger.info(f"Saving dataset to {output_file}")
+        df.to_csv(output_file, index=False)
+        
+        # Print summary statistics
+        print("\n" + "="*60)
+        print("DATASET SUMMARY")
+        print("="*60)
+        print(f"Total records: {len(df)}")
+        print(f"Date range: {df['Date'].min()} to {df['Date'].max()}")
+        print(f"Tickers: {df['Ticker'].unique().tolist()}")
+        print(f"Features: {len(df.columns)}")
+        print(f"\nMissing values in target (Volume_Next_Day): {df['Volume_Next_Day'].isna().sum()}")
+        print(f"\nFirst few rows:")
+        print(df.head(10))
+        print("\nColumn list:")
+        for i, col in enumerate(df.columns, 1):
+            print(f"  {i}. {col}")
+        print("="*60)
 
 
 if __name__ == "__main__":
-    main()
+    # Configuration
+    MENTIONS_CSV = "media_mentions.csv"  # Your mentions CSV file
+    STOCK_DATA_DIR = "."  # Directory with stock CSV files
+    TICKERS = ['AMSC', 'BP', 'EVR', 'GOOGL', 'GTXI', 'HLF', 'MDRX', 'ORCL', 'SPPI', 'WFC']
+    OUTPUT_FILE = "media_stock_features.csv"
+    
+    # Run feature engineering
+    engineer = MediaStockFeatureEngineer(
+        mentions_csv=MENTIONS_CSV,
+        stock_data_dir=STOCK_DATA_DIR,
+        tickers=TICKERS
+    )
+    
+    df = engineer.engineer_features()
+    engineer.save_dataset(df, OUTPUT_FILE)
+    
+    print(f"\n✓ Feature engineering complete!")
+    print(f"✓ Output saved to: {OUTPUT_FILE}")
