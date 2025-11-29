@@ -30,11 +30,16 @@ scikit-learn
 # Deep learning
 tensorflow  # or keras
 keras
+transformers
+transformers_interpret
 
 # Data processing
 beautifulsoup4
 requests
-zipfile36
+zipfile
+datetime
+random
+yfinance
 
 # Analysis
 fastdtw  # for DTW calculations
@@ -44,7 +49,7 @@ fastdtw  # for DTW calculations
 
 1. **Clone the repository**
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/jadams1313/insider-trading-detection
 cd insider-trading-detection
 ```
 
@@ -75,23 +80,15 @@ insider-trading-detection/
 
 ## 📊 Pipeline Workflow
 
-### Step 1: Collect Litigation Data (Optional)
+### Step 0: Litigation classifier
 
-Label companies with past insider trading legal issues:
-
-```python
-from litigation.insider_data_crawler import LitigationCrawler
-
-crawler = LitigationCrawler(output_dir="litigation_data")
-crawler.crawl_all_sources()
-crawler.save_combined_dataset()
-```
+1. Labes labels litigation brought against companies as insider or non-insider. 
 
 **Output:** `litigation_data/combined_litigation.csv`
 
 ---
 
-### Step 2: Download Stock Data
+### Step 1: Download Stock Data
 
 Place stock price CSV files in `trades/data/input/company_trades/`
 
@@ -106,14 +103,10 @@ Date,Open,High,Low,Close,Adj Close,Volume
 
 ---
 
-### Step 3: Process GDELT Media Data
+### Step 2: Process GDELT Media Data
 
 Download GDELT Global Knowledge Graph (GKG) files and process them:
-
-```bash
-# In media/ directory
-jupyter notebook media.ipynb
-```
+1. The following process is shown in media.ipynb
 
 **Key steps in notebook:**
 1. Load raw GKG `.zip` files from `media_data/input/raw/`
@@ -125,39 +118,18 @@ jupyter notebook media.ipynb
 
 ---
 
-### Step 4: Integrate Media + Stock Data
+### Step 3: Integrate Media + Stock Data
 
-Merge GDELT coverage with stock prices:
+Merge GDELT coverage with stock prices
 
-```python
-from trades.media_integration import GDELTStockIntegrator
+1. You will find any necessary integration steps in MediaIntegration.ipynb
 
-integrator = GDELTStockIntegrator(
-    stock_file='trades/data/input/company_trades/AAPL.csv',
-    gdelt_file='media/media_data/output/gkg_company_timeseries.csv',
-    ticker='AAPL'
-)
 
-merged_df, output_file = integrator.process()
-```
+### Step 4: Train LSTM Models
 
-**Output:** `trades/data/input/media_integrated/AAPL_processed.csv`
-
-**Features created:**
-- Stock: `Volume`, `Returns`, `Volume_Change`, `MA_5`, `MA_20`, `Volatility_5`, `Price_Range`
-- Media: `ArticleCount`, `Tone`, `Polarity`, `ArticleCount_MA_7`, `Tone_MA_7`
-- Events: `High_Coverage`, `Negative_Tone`, `Very_Negative_Tone`, `Volume_Spike`, `Major_Event`
-
----
-
-### Step 5: Train LSTM Models
-
-Train both baseline (volume-only) and enhanced (volume + media) models:
-
-```bash
-# In trades/ directory
-jupyter notebook trades.ipynb
-```
+1. Train both baseline (volume-only) and enhanced (volume + media) models:
+2. Any necessary training information can be found in trades.ipynb
+3. Outputs for performance are saved as PNGs locally, replicating similar statistical measurements and visuals as the parent paper. 
 
 **Configuration:**
 ```python
@@ -198,90 +170,10 @@ model_enhanced, history_enhanced = pipeline.train_and_predict(
 - `data/output/AAPL_full_point_pred_enhanced.csv`
 - `data/output/AAPL_full_sequence_pred_enhanced.csv`
 
-**Three prediction methods:**
-1. **Window-based:** Predicts next N days in one forward pass
-2. **Point-by-point:** Predicts one day ahead iteratively
-3. **Historical:** Uses full historical sequence for prediction
-
 ---
 
-### Step 6: Detect Anomalies with DTW
-
-Run pattern detection on LSTM predictions:
-
-```bash
-# In detection/ directory
-jupyter notebook detection.ipynb
-```
-
-**Configuration:**
-```python
-import detection_tools as dt
-
-# Define companies and parameters
-tickers = ['AAPL', 'MSFT', 'GOOGL']
-pattern_lengths = [5, 7, 10, 15, 20, 25]
-window_size = 30
-threshold = 0.5           # Baseline DTW threshold
-threshold_enhanced = 0.45  # Enhanced model threshold
-overlap = 10
-```
-
-**Detection process:**
-```python
-# Generate insider trading patterns
-patterns = dt.generate_insider_patterns(pattern_lengths)
-
-# Load predictions for each ticker
-data_dicts = {}
-data_dicts_enhanced = {}
-
-for ticker in tickers:
-    data_dicts[ticker] = dt.load_ticker_data(ticker, 'baseline', data_dir)
-    data_dicts_enhanced[ticker] = dt.load_ticker_data(ticker, 'enhanced', data_dir)
-
-# Run detection
-all_results = {}
-all_results_enhanced = {}
-
-for ticker in tickers:
-    results = dt.run_detection(
-        data_dicts[ticker], 
-        patterns, 
-        threshold, 
-        window_size, 
-        overlap
-    )
-    all_results[ticker] = results
-    
-    results_enhanced = dt.run_detection(
-        data_dicts_enhanced[ticker], 
-        patterns, 
-        threshold_enhanced, 
-        window_size, 
-        overlap
-    )
-    all_results_enhanced[ticker] = results_enhanced
-```
-
-**Analysis & Visualization:**
-```python
-# Summarize detections
-for ticker in tickers:
-    summary = dt.summarize_results(all_results[ticker])
-    print(f"\n{ticker} - BASELINE:")
-    print(summary)
-    
-    summary_enhanced = dt.summarize_results(all_results_enhanced[ticker])
-    print(f"\n{ticker} - ENHANCED:")
-    print(summary_enhanced)
-
-# Visualize results
-dt.plot_method_comparison(all_results, ticker='AAPL')
-dt.plot_ticker_comparison(all_results, method_name='window_based')
-dt.plot_top_anomalies(all_results, ticker='AAPL', method_name='window_based', top_n=5)
-```
-
+### Step 5: Detect Anomalies with DTW
+1. You will find any necessary detection steps in detect.ipynb
 ---
 
 ## 📁 Key Files & Modules
