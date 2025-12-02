@@ -61,7 +61,7 @@ pip install -r requirements.txt
 3. **Set up directory structure**
 ```
 insider-trading-detection/
-├── litigation/           # Litigation data crawler
+├── litigation/           # Litigation classifer
 ├── media/               # GDELT media processing
 │   ├── media_data/
 │   │   ├── input/raw/   # Raw GDELT GKG files (.zip)
@@ -84,7 +84,6 @@ insider-trading-detection/
 
 1. Labes labels litigation brought against companies as insider or non-insider. 
 
-**Output:** `litigation_data/combined_litigation.csv`
 
 ---
 
@@ -179,9 +178,7 @@ model_enhanced, history_enhanced = pipeline.train_and_predict(
 ## 📁 Key Files & Modules
 
 ### Litigation Module
-- **`litigation/insider_data_crawler.py`**: Scrapes SEC, FBI, and US SDNY litigation releases
-- **`litigation/litigation_classifier.py`** Progressively evaluates Litgation data to identify those under suspicion for insider trading. 
-
+- **`litigation/litigation.ipynb`** Progressively evaluates Litgation data to identify those under suspicion for insider trading.
 ### Media Module
 - **`media/media.ipynb`**: GDELT GKG processing notebook
 - **`media/media_data.py`**: Helper functions for parsing and filtering GKG data
@@ -231,6 +228,7 @@ model_enhanced, history_enhanced = pipeline.train_and_predict(
 
 1. **Does media coverage improve volume prediction accuracy? Consequently, does it improve detection accuracy?**
    - Compare R² and RMSE between baseline and enhanced models
+   - Compare anomaly detection findings to parent paper
 
 2. **Which prediction method detects the most anomalies?**
    - Analyze detection counts across window/point/sequence methods
@@ -263,25 +261,17 @@ model_enhanced, history_enhanced = pipeline.train_and_predict(
 - Fill missing GDELT days with zeros: `ArticleCount=0`, `Tone=0`, `Polarity=0`
 - Use forward-fill for moving averages
 - Check date alignment between stock and GDELT files
-
----
-
-## 📚 References
-
-1. **FinBERT-based litigation classification** - Text analysis for legal documents
-
-
 ---
 
 ---
 
-## 📝 License
+##  License
 
 This project is for educational and research purposes only.
 
 ---
 
-## 🔗 Resources
+##  Resources
 
 - **GDELT Project:** https://www.gdeltproject.org/
 - **Yahoo Finance:** https://finance.yahoo.com/
