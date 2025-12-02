@@ -82,27 +82,34 @@ class MediaStockFeatureEngineer:
         """Merge mentions and stock data"""
         logger.info("Merging mentions and stock data...")
         
-        # Filter mentions data for the specific ticker
-        mentions_df = mentions_df[mentions_df['Ticker'] == ticker].copy()
-        
-        # Ensure Date columns are datetime, timezone-naive, and normalized to midnight
-        mentions_df['Date'] = pd.to_datetime(mentions_df['Date'], utc=True).dt.tz_localize(None)
-        stock_df['Date'] = pd.to_datetime(stock_df['Date'], utc=True).dt.tz_localize(None)
+        # Normalize dates to just date (no time, no timezone)
+        mentions_df['Date'] = pd.to_datetime(mentions_df['Date']).dt.normalize().dt.tz_localize(None)
+        stock_df['Date'] = pd.to_datetime(stock_df['Date']).dt.normalize().dt.tz_localize(None)
         
         logger.info(f"Stock date range: {stock_df['Date'].min()} to {stock_df['Date'].max()}")
         logger.info(f"Mentions date range: {mentions_df['Date'].min()} to {mentions_df['Date'].max()}")
-                
-        # Drop Ticker column from mentions before merge (to avoid duplication)
-        mentions_df = mentions_df.drop(columns=['Ticker'])
+        logger.info(f"Mentions records before merge: {len(mentions_df)}")
+        logger.info(f"Stock records before merge: {len(stock_df)}")
         
-        # Left join: keep all stock trading days, add mentions data
+        # Show sample dates to verify format
+        logger.info(f"Sample stock dates: {stock_df['Date'].head(3).tolist()}")
+        logger.info(f"Sample mention dates: {mentions_df['Date'].head(3).tolist()}")
+        
+        # Check what tickers we actually have
+        logger.info(f"Unique tickers in stock_df: {stock_df['Ticker'].unique()}")
+        logger.info(f"Unique tickers in mentions_df: {mentions_df['Ticker'].unique()}")
+        
+        # Left join on Ticker AND Date
         merged = stock_df.merge(
             mentions_df,
-            on='Date',
+            on=['Ticker', 'Date'],
             how='left'
         )
         
-        logger.info(f"After mentions merge: {len(merged)} records, {merged['ArticleCount'].notna().sum()} with mentions")
+        logger.info(f"After merge: {len(merged)} records")
+        if 'ArticleCount' in merged.columns:
+            logger.info(f"Records with articles: {(merged['ArticleCount'] > 0).sum()}")
+            logger.info(f"Total articles: {merged['ArticleCount'].sum()}")
         
         # Fill missing mention data with zeros
         mention_columns = ['ArticleCount', 'Tone', 'Polarity', 'WordCount']

@@ -191,27 +191,47 @@ class EnhancedLSTMPipeline:
         return predicted
     
     def predict_sequence_full(self, model, data):
-        """Historical-based forecasting (entire history)"""
+        """
+        Historical-based forecasting (entire history)
+        
+        Uses the COMPLETE historical sequence for each prediction.
+        More stable but slower - references all past data points.
+        Best for: Long-term trends, stable patterns
+        """
         curr_frame = data[0]
         predicted = []
         
         for i in range(len(data)):
+            # Predict next value using current historical window
             pred = model.predict(curr_frame[np.newaxis, :, :], verbose=0)[0, 0]
             predicted.append(pred)
+            
+            # Shift window: drop oldest, add new prediction
             curr_frame = np.roll(curr_frame, -1, axis=0)
             curr_frame[-1] = pred
         
         return np.array(predicted)
-    
+
     def predict_sequences_multiple(self, model, data, prediction_len=50):
-        """Window-based forecasting"""
+        """
+        Window-based forecasting (rolling window)
+        
+        Uses a FIXED-SIZE sliding window for each prediction.
+        Faster but may accumulate errors - only sees recent history.
+        Best for: Short-term patterns, reactive predictions
+        
+        Args:
+            prediction_len: Size of the rolling window (default: 50)
+        """
         predictions = []
         curr_frame = data[0]
 
         for i in range(len(data)):
+            # Predict next value using fixed-size window
             pred = model.predict(curr_frame[np.newaxis, :, :], verbose=0)[0, 0]
             predictions.append(pred)
 
+            # Roll window: drop oldest observation, add new prediction
             curr_frame = np.roll(curr_frame, -1, axis=0)
             curr_frame[-1] = pred
 
